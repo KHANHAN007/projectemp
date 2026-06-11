@@ -1,0 +1,381 @@
+{
+  "info": {
+    "_postman_id": "64c72535-b377-4b97-96d2-fr0405060001",
+    "name": "Rikkei Bank - FR-04 FR-05 FR-06 Full Tests",
+    "description": "Run folders in order. On another machine, select any JPEG, PNG, or PDF smaller than 5 MB in each multipart eKYC request. Redis must be running because authenticated requests check the JWT blacklist.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.name) throw new Error('Select the Rikkei Bank Local environment before running this collection.');",
+          "if (!pm.environment.get('baseUrl')) pm.environment.set('baseUrl', 'http://localhost:8080');",
+          "if (!pm.environment.get('adminUsername')) pm.environment.set('adminUsername', 'admin');",
+          "if (!pm.environment.get('adminPassword')) pm.environment.set('adminPassword', 'Admin@123');",
+          "if (!pm.environment.get('customerPassword')) pm.environment.set('customerPassword', 'Customer@123');",
+          "if (!pm.environment.get('customerPin')) pm.environment.set('customerPin', '123456');",
+          "if (!pm.environment.get('runId')) {",
+          "  const runId = Date.now().toString().slice(-9);",
+          "  pm.environment.set('runId', runId);",
+          "  pm.environment.set('customerUsername', 'customer_' + runId);",
+          "  pm.environment.set('customerEmail', 'customer_' + runId + '@example.com');",
+          "  pm.environment.set('customerPhone', '09' + runId);",
+          "  pm.environment.set('idNumber', 'CCCD' + runId);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "FR-04 - Register and eKYC",
+      "item": [
+        {
+          "name": "00 - Verify baseUrl points to RikkeiBank",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v3/api-docs"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('OpenAPI endpoint is reachable', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test('baseUrl points to RikkeiBank', () => pm.expect(json.info.title).to.eql('Rikkei Bank REST API'));",
+            "console.log('Testing RikkeiBank at:', pm.environment.get('baseUrl'));"
+          ]}}]
+        },
+        {
+          "name": "01 - Register customer and open default account - 201",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"email\": \"{{customerEmail}}\",\n  \"phoneNumber\": \"{{customerPhone}}\",\n  \"transactionPin\": \"{{customerPin}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/registrations"
+          },
+          "event": [{
+            "listen": "prerequest",
+            "script": {"exec": [
+              "const runId = Date.now().toString().slice(-9);",
+              "pm.environment.set('runId', runId);",
+              "pm.environment.set('customerUsername', 'customer_' + runId);",
+              "pm.environment.set('customerEmail', 'customer_' + runId + '@example.com');",
+              "pm.environment.set('customerPhone', '09' + runId);",
+              "pm.environment.set('idNumber', 'CCCD' + runId);",
+              "pm.environment.set('customerPassword', 'Customer@123');",
+              "pm.environment.set('customerPin', '123456');",
+              "pm.environment.unset('customerToken');"
+            ]}
+          }, {
+            "listen": "test",
+            "script": {"exec": [
+              "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "pm.test('Customer role and KYC false', () => { pm.expect(json.data.role).to.eql('CUSTOMER'); pm.expect(json.data.kyc).to.eql(false); });",
+              "pm.environment.set('customerUserId', json.data.id);",
+              "console.log('Registered customer:', pm.environment.get('customerUsername'), 'at', pm.environment.get('baseUrl'));"
+            ]}
+          }]
+        },
+        {
+          "name": "02 - Register duplicate identity - 409",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"email\": \"{{customerEmail}}\",\n  \"phoneNumber\": \"{{customerPhone}}\",\n  \"transactionPin\": \"{{customerPin}}\"\n}"},
+            "url": "{{baseUrl}}/api/v1/registrations"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Duplicate registration returns 409', () => pm.response.to.have.status(409));"]}}]
+        },
+        {
+          "name": "03 - Customer login - save token",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\"\n}"},
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Login succeeds', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "if (pm.response.code === 200 && json.data) pm.environment.set('customerToken', json.data.accessToken);",
+            "else console.error('Login failed. baseUrl=', pm.environment.get('baseUrl'), 'username=', pm.environment.get('customerUsername'), 'passwordLength=', (pm.environment.get('customerPassword') || '').length, 'response=', pm.response.text());"
+          ]}}]
+        },
+        {
+          "name": "04 - Upload eKYC file - select file before Send",
+          "request": {
+            "description": "Select any JPEG, PNG, or PDF smaller than 5 MB. This request logs in again immediately before upload to avoid an expired access token.",
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "data",
+                  "value": "{\"idNumber\":\"{{idNumber}}\",\"fullName\":\"Nguyen Van Test\",\"dob\":\"2000-01-01\",\"sex\":\"MALE\",\"address\":\"Ha Noi\"}",
+                  "type": "text",
+                  "contentType": "application/json"
+                },
+                {"key": "file", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/customer/kyc"
+          },
+          "event": [
+            {"listen": "prerequest", "script": {"exec": [
+              "pm.sendRequest({",
+              "  url: pm.environment.get('baseUrl') + '/api/auth/login',",
+              "  method: 'POST',",
+              "  header: {'Content-Type': 'application/json'},",
+              "  body: {mode: 'raw', raw: JSON.stringify({username: pm.environment.get('customerUsername'), password: pm.environment.get('customerPassword')})}",
+              "}, (err, res) => {",
+              "  if (err || res.code !== 200) throw new Error('Customer login before eKYC upload failed. Check baseUrl, credentials, MySQL, and Redis.');",
+              "  const token = res.json().data.accessToken;",
+              "  pm.environment.set('customerToken', token);",
+              "  pm.request.headers.upsert({key: 'Authorization', value: 'Bearer ' + token});",
+              "});"
+            ]}},
+            {"listen": "test", "script": {"exec": [
+            "pm.test('eKYC upload succeeds', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.test('Initial status is PENDING', () => pm.expect(json.data.status).to.eql('PENDING'));",
+            "pm.environment.set('kycId', json.data.id);"
+          ]}}]
+        },
+        {
+          "name": "05 - Upload duplicate eKYC profile - 409",
+          "request": {
+            "description": "Select a valid file. This must be rejected because the customer already has an eKYC profile.",
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "data", "value": "{\"idNumber\":\"{{idNumber}}\",\"fullName\":\"Nguyen Van Test\",\"dob\":\"2000-01-01\",\"sex\":\"MALE\",\"address\":\"Ha Noi\"}", "type": "text", "contentType": "application/json"},
+                {"key": "file", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/customer/kyc"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Duplicate eKYC returns 409', () => pm.response.to.have.status(409));"]}}]
+        },
+        {
+          "name": "06 - Upload eKYC without token - 401",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "data", "value": "{\"idNumber\":\"NOAUTH{{runId}}\",\"fullName\":\"No Auth\",\"dob\":\"2000-01-01\",\"sex\":\"MALE\",\"address\":\"Ha Noi\"}", "type": "text", "contentType": "application/json"},
+                {"key": "file", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/customer/kyc"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Missing token returns 401', () => pm.response.to.have.status(401));"]}}]
+        }
+      ]
+    },
+    {
+      "name": "FR-05 - User and Account CRUD with Pagination",
+      "item": [
+        {
+          "name": "01 - Admin login - save token",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}"},
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Admin login succeeds', () => pm.response.to.have.status(200));",
+            "pm.environment.set('adminToken', pm.response.json().data.accessToken);"
+          ]}}]
+        },
+        {
+          "name": "02 - List users with pagination and projection",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}],
+            "url": "{{baseUrl}}/api/v1/admin/users?page=0&size=2&sort=createdAt,desc"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Users page returned', () => pm.response.to.have.status(200));",
+            "const page = pm.response.json().data;",
+            "pm.test('Response is paginated', () => { pm.expect(page.content).to.be.an('array'); pm.expect(page.size).to.eql(2); });",
+            "const customer = page.content.find(u => u.username === pm.environment.get('customerUsername'));",
+            "if (customer) pm.environment.set('customerUserId', customer.id);"
+          ]}}]
+        },
+        {
+          "name": "03 - Update customer email and phone",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"updated_{{runId}}@example.com\",\n  \"phoneNumber\": \"08{{runId}}\",\n  \"active\": true,\n  \"role\": \"CUSTOMER\"\n}"},
+            "url": "{{baseUrl}}/api/v1/admin/users/{{customerUserId}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('User update succeeds', () => pm.response.to.have.status(200));",
+            "pm.test('Email updated', () => pm.expect(pm.response.json().data.email).to.eql('updated_' + pm.environment.get('runId') + '@example.com'));"
+          ]}}]
+        },
+        {
+          "name": "04 - Update customer with invalid email - 400",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"email\":\"not-an-email\"}"},
+            "url": "{{baseUrl}}/api/v1/admin/users/{{customerUserId}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Invalid email returns 400', () => pm.response.to.have.status(400));"]}}]
+        },
+        {
+          "name": "05 - Customer cannot access admin users - 403",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}"}],
+            "url": "{{baseUrl}}/api/v1/admin/users?page=0&size=5"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Wrong role returns 403', () => pm.response.to.have.status(403));"]}}]
+        },
+        {
+          "name": "06 - List accounts with pagination and save primary account",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}],
+            "url": "{{baseUrl}}/api/v1/admin/accounts?page=0&size=100"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Accounts page returned', () => pm.response.to.have.status(200));",
+            "const page = pm.response.json().data;",
+            "pm.test('Account response is paginated', () => pm.expect(page.content).to.be.an('array'));",
+            "const account = page.content.find(a => String(a.userId) === String(pm.environment.get('customerUserId')));",
+            "pm.expect(account, 'default account created during registration').to.exist;",
+            "pm.environment.set('primaryAccountId', account.id);"
+          ]}}]
+        },
+        {
+          "name": "07 - Create another account for customer - 201",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"userId\": {{customerUserId}},\n  \"transactionPin\": \"654321\",\n  \"currency\": \"VND\"\n}"},
+            "url": "{{baseUrl}}/api/v1/admin/accounts"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Account creation returns 201', () => pm.response.to.have.status(201));",
+            "pm.environment.set('managedAccountId', pm.response.json().data.id);"
+          ]}}]
+        },
+        {
+          "name": "08 - Update managed account to inactive",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"active\":false,\"currency\":\"VND\"}"},
+            "url": "{{baseUrl}}/api/v1/admin/accounts/{{managedAccountId}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Account update succeeds', () => pm.response.to.have.status(200));",
+            "pm.test('Account is inactive', () => pm.expect(pm.response.json().data.active).to.eql(false));"
+          ]}}]
+        },
+        {
+          "name": "09 - Delete managed account - soft delete 204",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}],
+            "url": "{{baseUrl}}/api/v1/admin/accounts/{{managedAccountId}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Delete account returns 204', () => pm.response.to.have.status(204));"]}}]
+        },
+        {
+          "name": "10 - List pending eKYC as Admin",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}],
+            "url": "{{baseUrl}}/api/v1/staff/kyc?page=0&size=20"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Pending KYC page returned', () => pm.response.to.have.status(200));",
+            "const item = pm.response.json().data.content.find(k => k.username === pm.environment.get('customerUsername'));",
+            "if (item) pm.environment.set('kycId', item.id);",
+            "pm.expect(item, 'customer pending KYC').to.exist;"
+          ]}}]
+        },
+        {
+          "name": "11 - Approve eKYC as Admin",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"status\":\"CONFIRM\",\"reason\":null}"},
+            "url": "{{baseUrl}}/api/v1/staff/kyc/{{kycId}}/review"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('KYC approval succeeds', () => pm.response.to.have.status(200));",
+            "pm.test('KYC is confirmed', () => pm.expect(pm.response.json().data.status).to.eql('CONFIRM'));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "FR-06 - Balance Inquiry",
+      "item": [
+        {
+          "name": "01 - Customer views own balances",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}"}],
+            "url": "{{baseUrl}}/api/v1/customer/accounts/balances"
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Balance inquiry succeeds', () => pm.response.to.have.status(200));",
+            "const accounts = pm.response.json().data;",
+            "pm.test('Returns accounts without exposing PIN', () => { pm.expect(accounts).to.be.an('array').that.is.not.empty; pm.expect(accounts[0]).not.to.have.property('transactionPin'); });",
+            "pm.test('Primary account is returned', () => pm.expect(accounts.map(a => String(a.id))).to.include(String(pm.environment.get('primaryAccountId'))));"
+          ]}}]
+        },
+        {
+          "name": "02 - Balance inquiry without token - 401",
+          "request": {"method": "GET", "url": "{{baseUrl}}/api/v1/customer/accounts/balances"},
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Missing token returns 401', () => pm.response.to.have.status(401));"]}}]
+        },
+        {
+          "name": "03 - Admin cannot use customer balance endpoint - 403",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}],
+            "url": "{{baseUrl}}/api/v1/customer/accounts/balances"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Wrong role returns 403', () => pm.response.to.have.status(403));"]}}]
+        },
+        {
+          "name": "04 - Delete customer user last - 204",
+          "request": {
+            "description": "Run last because user deletion is a soft lock and prevents future customer login.",
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}],
+            "url": "{{baseUrl}}/api/v1/admin/users/{{customerUserId}}"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Delete user returns 204', () => pm.response.to.have.status(204));"]}}]
+        },
+        {
+          "name": "05 - Locked customer login - 403",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\"\n}"},
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [{"listen": "test", "script": {"exec": ["pm.test('Soft-deleted customer cannot login', () => pm.response.to.have.status(403));"]}}]
+        }
+      ]
+    }
+  ]
+}

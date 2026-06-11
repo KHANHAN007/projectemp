@@ -1,0 +1,12 @@
+{
+  "info": {"name": "Rikkei Bank API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable": [{"key":"baseUrl","value":"http://localhost:8080"},{"key":"accessToken","value":""},{"key":"refreshToken","value":""}],
+  "item": [
+    {"name":"Register","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/api/v1/registrations","body":{"mode":"raw","raw":"{\"username\":\"customer1\",\"password\":\"Customer@123\",\"email\":\"customer1@example.com\",\"phoneNumber\":\"0900000001\",\"transactionPin\":\"123456\"}"}}},
+    {"name":"Login","event":[{"listen":"test","script":{"exec":["const d=pm.response.json().data; pm.collectionVariables.set('accessToken',d.accessToken); pm.collectionVariables.set('refreshToken',d.refreshToken);"]}}],"request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/api/auth/login","body":{"mode":"raw","raw":"{\"username\":\"customer1\",\"password\":\"Customer@123\"}"}}},
+    {"name":"Refresh","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/api/auth/refresh","body":{"mode":"raw","raw":"{\"refreshToken\":\"{{refreshToken}}\"}"}}},
+    {"name":"Balances","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{accessToken}}"}],"url":"{{baseUrl}}/api/v1/customer/accounts/balances"}},
+    {"name":"Transfer","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{accessToken}}"},{"key":"Content-Type","value":"application/json"}],"url":"{{baseUrl}}/api/v1/customer/transactions/transfer","body":{"mode":"raw","raw":"{\"fromAccountId\":1,\"toAccountId\":2,\"amount\":10000,\"description\":\"test\",\"pin\":\"123456\"}"}}},
+    {"name":"Logout","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{accessToken}}"}],"url":"{{baseUrl}}/api/auth/logout"}}
+  ]
+}

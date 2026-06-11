@@ -1,0 +1,261 @@
+{
+  "info": {
+    "name": "RikkeiBank Day2 FR01 FR02 FR03 FR07 FR08 FR09 FR10",
+    "description": "Postman collection for Day 2: JWT login, refresh token rotation, logout/revoke, transfer, statement, KYC review, PIN/password flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "FR-01 Customer login - save access and refresh token",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('login successful', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "if (json.data) {",
+            "  pm.environment.set('customerToken', json.data.accessToken);",
+            "  pm.environment.set('customerRefreshToken', json.data.refreshToken);",
+            "}"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "FR-02 Rotate refresh token - save new tokens",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/v1/auth/refresh",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{customerRefreshToken}}\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('refresh rotated', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "if (json.data) {",
+            "  pm.environment.set('customerToken', json.data.accessToken);",
+            "  pm.environment.set('customerRefreshToken', json.data.refreshToken);",
+            "}"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "FR-07 Internal transfer",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/customer/transactions/transfer",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fromAccountId\": {{primaryAccountId}},\n  \"toAccountId\": {{destinationAccountId}},\n  \"amount\": 10000,\n  \"description\": \"Internal transfer Day2\",\n  \"pin\": \"{{customerPin}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "FR-07 Interbank transfer",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/customer/transactions/transfer",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fromAccountId\": {{primaryAccountId}},\n  \"beneficiaryBank\": \"Rikkei Partner Bank\",\n  \"beneficiaryAccount\": \"9876543210\",\n  \"amount\": 5000,\n  \"description\": \"Interbank transfer Day2\",\n  \"pin\": \"{{customerPin}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "FR-08 Account statement",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/customer/accounts/{{primaryAccountId}}/transactions?page=0&size=20&sort=createdAt,desc",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "customer", "accounts", "{{primaryAccountId}}", "transactions"],
+          "query": [
+            { "key": "page", "value": "0" },
+            { "key": "size", "value": "20" },
+            { "key": "sort", "value": "createdAt,desc" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "FR-08 Account statement with date filter",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/customer/accounts/{{primaryAccountId}}/transactions?from=2026-01-01T00:00:00&to=2026-12-31T23:59:59&page=0&size=20&sort=createdAt,desc",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "customer", "accounts", "{{primaryAccountId}}", "transactions"],
+          "query": [
+            { "key": "from", "value": "2026-01-01T00:00:00" },
+            { "key": "to", "value": "2026-12-31T23:59:59" },
+            { "key": "page", "value": "0" },
+            { "key": "size", "value": "20" },
+            { "key": "sort", "value": "createdAt,desc" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "FR-09 Admin login - save token",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('admin login successful', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "if (json.data) pm.environment.set('adminToken', json.data.accessToken);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "FR-09 List pending KYC",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": "{{baseUrl}}/api/v1/staff/kyc?page=0&size=20"
+      }
+    },
+    {
+      "name": "FR-09 Approve KYC",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/staff/kyc/{{kycId}}/review",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"CONFIRM\",\n  \"reason\": null\n}"
+        }
+      }
+    },
+    {
+      "name": "FR-09 Reject KYC",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/staff/kyc/{{kycId}}/review",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"REJECT\",\n  \"reason\": \"Uploaded document is not clear\"\n}"
+        }
+      }
+    },
+    {
+      "name": "FR-10 Change transaction PIN",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/customer/accounts/{{primaryAccountId}}/pin",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currentPin\": \"{{customerPin}}\",\n  \"newPin\": \"{{newCustomerPin}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "FR-10 Change login password",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/change-password",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currentPassword\": \"{{customerPassword}}\",\n  \"newPassword\": \"{{newCustomerPassword}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "FR-10 Forgot password - demo reset token",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/v1/auth/forgot-password",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{customerUsername}}\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('reset token issued', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "if (json.data) pm.environment.set('resetToken', json.data);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "FR-10 Reset password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/v1/auth/reset-password",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newCustomerPassword}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "FR-03 Logout - revoke access token and refresh tokens",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{customerToken}}" }],
+        "url": "{{baseUrl}}/api/v1/auth/logout"
+      }
+    }
+  ]
+}

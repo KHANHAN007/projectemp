@@ -1,4 +1,4 @@
-package com.rikkeibank.domain;
+package com.rikkeibank.model;
 
 import jakarta.persistence.*;
 import lombok.Getter;

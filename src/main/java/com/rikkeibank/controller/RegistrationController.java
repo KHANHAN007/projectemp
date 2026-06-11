@@ -4,6 +4,8 @@ import com.rikkeibank.dto.ApiResponse;
 import com.rikkeibank.dto.UserDtos.RegisterRequest;
 import com.rikkeibank.dto.UserResponse;
 import com.rikkeibank.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +16,20 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/registrations")
+@Tag(name = "FR-04 Registration", description = "Customer registration and default account opening")
 public class RegistrationController {
-    private final UserService service;public RegistrationController(UserService service){this.service=service;}
-    @PostMapping public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest req){return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Registration successful",service.register(req)));}
+    private final UserService service;
+
+    public RegistrationController(UserService service) {
+        this.service = service;
+    }
+
+    @PostMapping
+    @Operation(summary = "Register a customer and open a default account")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Registration successful")
+    public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(ApiResponse.ok("Registration successful", service.register(request)));
+    }
 }

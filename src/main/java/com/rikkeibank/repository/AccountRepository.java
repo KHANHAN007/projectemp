@@ -1,6 +1,6 @@
 package com.rikkeibank.repository;
 
-import com.rikkeibank.domain.Account;
+import com.rikkeibank.model.Account;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;

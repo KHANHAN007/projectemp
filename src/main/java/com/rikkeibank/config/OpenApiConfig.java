@@ -10,8 +10,19 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class OpenApiConfig {
-    @Bean OpenAPI openAPI(){return new OpenAPI().info(new Info().title("Rikkei Bank REST API").version("v1")
-        .description("Stateless banking API implementing FR-01 through FR-13"))
-        .components(new Components().addSecuritySchemes("bearerAuth",new SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")))
-        .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));}
+    @Bean
+    OpenAPI openAPI() {
+        SecurityScheme bearerScheme = new SecurityScheme()
+            .type(SecurityScheme.Type.HTTP)
+            .scheme("bearer")
+            .bearerFormat("JWT");
+
+        return new OpenAPI()
+            .info(new Info()
+                .title("Rikkei Bank REST API")
+                .version("v1")
+                .description("Stateless banking API implementing FR-01 through FR-13"))
+            .components(new Components().addSecuritySchemes("bearerAuth", bearerScheme))
+            .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));
+    }
 }

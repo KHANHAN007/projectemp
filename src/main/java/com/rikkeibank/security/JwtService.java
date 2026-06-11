@@ -1,8 +1,7 @@
 package com.rikkeibank.security;
 
-import com.rikkeibank.domain.User;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
+import com.rikkeibank.model.User;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;

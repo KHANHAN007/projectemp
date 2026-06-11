@@ -1,6 +1,6 @@
 package com.rikkeibank.repository;
 
-import com.rikkeibank.domain.BankTransaction;
+import com.rikkeibank.model.BankTransaction;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

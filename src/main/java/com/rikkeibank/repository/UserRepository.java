@@ -1,6 +1,6 @@
 package com.rikkeibank.repository;
 
-import com.rikkeibank.domain.User;
+import com.rikkeibank.model.User;
 import com.rikkeibank.dto.UserResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

@@ -3,7 +3,7 @@ services:
     image: mysql:8.4
     environment:
       MYSQL_DATABASE: rikkei_bank
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-anlinh.99}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rikkei_secret}
     ports:
       - "3307:3306"
     volumes:

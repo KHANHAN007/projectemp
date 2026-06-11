@@ -1,9 +1,8 @@
 package com.rikkeibank.repository;
 
-import com.rikkeibank.domain.Role;
-import com.rikkeibank.domain.RoleName;
+import com.rikkeibank.model.Role;
+import com.rikkeibank.model.RoleName;
 import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.util.Optional;
 
 public interface RoleRepository extends JpaRepository<Role, Long> {

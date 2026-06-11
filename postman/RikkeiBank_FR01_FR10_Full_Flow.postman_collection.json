@@ -1,0 +1,781 @@
+{
+  "info": {
+    "_postman_id": "b8911c4d-fr01-fr10-full-flow",
+    "name": "RikkeiBank - FR01 to FR10 Full Flow",
+    "description": "Run in order with Rikkei Bank Local environment. For eKYC upload, select a file before Send. Transfer success requires the source account to have balance; otherwise FR-07 should return 409 Insufficient balance because this project has no deposit API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.name) throw new Error('Select Rikkei Bank Local environment first.');",
+          "if (!pm.environment.get('baseUrl')) pm.environment.set('baseUrl', 'http://localhost:8080');",
+          "if (!pm.environment.get('adminUsername')) pm.environment.set('adminUsername', 'admin');",
+          "if (!pm.environment.get('adminPassword')) pm.environment.set('adminPassword', 'Admin@123');",
+          "if (!pm.environment.get('customerPassword')) pm.environment.set('customerPassword', 'Customer@123');",
+          "if (!pm.environment.get('customerPin')) pm.environment.set('customerPin', '123456');",
+          "if (!pm.environment.get('newCustomerPin')) pm.environment.set('newCustomerPin', '654321');",
+          "if (!pm.environment.get('newCustomerPassword')) pm.environment.set('newCustomerPassword', 'Customer@456');",
+          "if (!pm.environment.get('runId')) {",
+          "  const runId = Date.now().toString().slice(-9);",
+          "  pm.environment.set('runId', runId);",
+          "  pm.environment.set('customerUsername', 'customer_' + runId);",
+          "  pm.environment.set('customerEmail', 'customer_' + runId + '@example.com');",
+          "  pm.environment.set('customerPhone', '09' + runId);",
+          "  pm.environment.set('beneficiaryUsername', 'beneficiary_' + runId);",
+          "  pm.environment.set('beneficiaryEmail', 'beneficiary_' + runId + '@example.com');",
+          "  pm.environment.set('beneficiaryPhone', '07' + runId);",
+          "  pm.environment.set('idNumber', 'CCCD' + runId);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Health",
+      "item": [
+        {
+          "name": "00 - Verify OpenAPI",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v3/api-docs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('OpenAPI is reachable', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FR-04 - Registration and eKYC",
+      "item": [
+        {
+          "name": "01 - Register customer and open default account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"email\": \"{{customerEmail}}\",\n  \"phoneNumber\": \"{{customerPhone}}\",\n  \"transactionPin\": \"{{customerPin}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/registrations"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Created or duplicate if rerun', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.environment.set('customerUserId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Register beneficiary customer for internal transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{beneficiaryUsername}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"email\": \"{{beneficiaryEmail}}\",\n  \"phoneNumber\": \"{{beneficiaryPhone}}\",\n  \"transactionPin\": \"{{customerPin}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/registrations"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Created or duplicate if rerun', () => pm.expect([201, 409]).to.include(pm.response.code));",
+                  "if (pm.response.code === 201) pm.environment.set('beneficiaryUserId', pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Upload customer eKYC file - select file before Send",
+          "request": {
+            "description": "Select JPEG/PNG/PDF under 5MB in the file field.",
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "data",
+                  "value": "{\"idNumber\":\"{{idNumber}}\",\"fullName\":\"Nguyen Van Test\",\"dob\":\"2000-01-01\",\"sex\":\"MALE\",\"address\":\"Ha Noi\"}",
+                  "type": "text",
+                  "contentType": "application/json"
+                },
+                { "key": "file", "type": "file", "src": [] }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/customer/kyc"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.sendRequest({",
+                  "  url: pm.environment.get('baseUrl') + '/api/v1/auth/login',",
+                  "  method: 'POST',",
+                  "  header: {'Content-Type': 'application/json'},",
+                  "  body: {mode: 'raw', raw: JSON.stringify({username: pm.environment.get('customerUsername'), password: pm.environment.get('customerPassword')})}",
+                  "}, (err, res) => {",
+                  "  if (err || res.code !== 200) throw new Error('Customer login before eKYC failed');",
+                  "  const data = res.json().data;",
+                  "  pm.environment.set('customerToken', data.accessToken);",
+                  "  pm.environment.set('customerRefreshToken', data.refreshToken);",
+                  "  pm.request.headers.upsert({key: 'Authorization', value: 'Bearer ' + data.accessToken});",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('eKYC uploaded or duplicate if rerun', () => pm.expect([200, 409]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.environment.set('kycId', pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 - eKYC without token returns 401",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "data",
+                  "value": "{\"idNumber\":\"NOAUTH{{runId}}\",\"fullName\":\"No Auth\",\"dob\":\"2000-01-01\",\"sex\":\"MALE\",\"address\":\"Ha Noi\"}",
+                  "type": "text",
+                  "contentType": "application/json"
+                },
+                { "key": "file", "type": "file", "src": [] }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/customer/kyc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FR-01 FR-02 FR-03 - JWT Auth",
+      "item": [
+        {
+          "name": "01 - Login customer and save JWT",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login succeeds', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('customerToken', data.accessToken);",
+                  "pm.environment.set('customerRefreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Refresh token rotation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{customerRefreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Refresh succeeds', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('customerToken', data.accessToken);",
+                  "pm.environment.set('customerRefreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Reusing old refresh token returns 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"invalid-refresh-token\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Invalid refresh token rejected', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FR-05 FR-09 - Admin, Account CRUD, KYC Review",
+      "item": [
+        {
+          "name": "01 - Admin login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin login succeeds', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('adminToken', pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - List users with pagination",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/users?page=0&size=100&sort=createdAt,desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Users page returned', () => pm.response.to.have.status(200));",
+                  "const users = pm.response.json().data.content || [];",
+                  "const c = users.find(u => u.username === pm.environment.get('customerUsername'));",
+                  "const b = users.find(u => u.username === pm.environment.get('beneficiaryUsername'));",
+                  "if (c) pm.environment.set('customerUserId', c.id);",
+                  "if (b) pm.environment.set('beneficiaryUserId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Update customer user",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"updated_{{runId}}@example.com\",\n  \"phoneNumber\": \"08{{runId}}\",\n  \"active\": true,\n  \"role\": \"CUSTOMER\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/admin/users/{{customerUserId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('User updated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 - List accounts and save primary/destination account",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/accounts?page=0&size=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Accounts page returned', () => pm.response.to.have.status(200));",
+                  "const accounts = pm.response.json().data.content || [];",
+                  "const primary = accounts.find(a => String(a.userId) === String(pm.environment.get('customerUserId')));",
+                  "const dest = accounts.find(a => String(a.userId) === String(pm.environment.get('beneficiaryUserId')));",
+                  "if (primary) pm.environment.set('primaryAccountId', primary.id);",
+                  "if (dest) pm.environment.set('destinationAccountId', dest.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 - Create extra managed account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": {{customerUserId}},\n  \"transactionPin\": \"{{customerPin}}\",\n  \"currency\": \"VND\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/admin/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Account created', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('managedAccountId', pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 - Update managed account",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": true,\n  \"currency\": \"VND\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/admin/accounts/{{managedAccountId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Account updated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 - List pending KYC",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/staff/kyc?page=0&size=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Pending KYC page returned', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json().data.content || [];",
+                  "const item = list.find(k => k.username === pm.environment.get('customerUsername'));",
+                  "if (item) pm.environment.set('kycId', item.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 - Approve customer KYC",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRM\",\n  \"reason\": null\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/staff/kyc/{{kycId}}/review"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('KYC approved or already reviewed if rerun', () => pm.expect([200, 409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FR-06 FR-07 FR-08 - Balance, Transfer, Statement",
+      "item": [
+        {
+          "name": "01 - Customer balances",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/customer/accounts/balances"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Balances returned', () => pm.response.to.have.status(200));",
+                  "const accounts = pm.response.json().data || [];",
+                  "if (accounts[0]) pm.environment.set('primaryAccountId', accounts[0].id);",
+                  "console.log('If balance is 0, transfer requests should return 409 until DB has funds.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Internal transfer",
+          "request": {
+            "description": "Returns 200 when source account has balance; returns 409 Insufficient balance when balance is zero.",
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccountId\": {{primaryAccountId}},\n  \"toAccountId\": {{destinationAccountId}},\n  \"amount\": 10000,\n  \"description\": \"Internal transfer FR07\",\n  \"pin\": \"{{customerPin}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/customer/transactions/transfer"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Transfer succeeds or rejects insufficient balance', () => pm.expect([200, 409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Interbank transfer",
+          "request": {
+            "description": "Returns 200 when source account has balance; returns 409 Insufficient balance when balance is zero.",
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccountId\": {{primaryAccountId}},\n  \"beneficiaryBank\": \"Rikkei Partner Bank\",\n  \"beneficiaryAccount\": \"9876543210\",\n  \"amount\": 5000,\n  \"description\": \"Interbank transfer FR07\",\n  \"pin\": \"{{customerPin}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/customer/transactions/transfer"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Transfer succeeds or rejects insufficient balance', () => pm.expect([200, 409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 - Statement history",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/customer/accounts/{{primaryAccountId}}/transactions?page=0&size=20&sort=createdAt,desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Statement page returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 - Statement history with date filter",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/customer/accounts/{{primaryAccountId}}/transactions?from=2026-01-01T00:00:00&to=2026-12-31T23:59:59&page=0&size=20&sort=createdAt,desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Statement page returned', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FR-10 - PIN and Password",
+      "item": [
+        {
+          "name": "01 - Change transaction PIN",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPin\": \"{{customerPin}}\",\n  \"newPin\": \"{{newCustomerPin}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/customer/accounts/{{primaryAccountId}}/pin"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('PIN changed or current PIN already changed on rerun', () => pm.expect([200, 401]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.environment.set('customerPin', pm.environment.get('newCustomerPin'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Forgot password returns demo reset token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{customerUsername}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/forgot-password"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Reset token issued', () => pm.response.to.have.status(200));",
+                  "pm.environment.set('resetToken', pm.response.json().data);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Reset password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newCustomerPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/reset-password"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Password reset succeeds', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) pm.environment.set('customerPassword', pm.environment.get('newCustomerPassword'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 - Login with new password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{customerUsername}}\",\n  \"password\": \"{{customerPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login with new password succeeds', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('customerToken', data.accessToken);",
+                  "pm.environment.set('customerRefreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FR-03 and Cleanup",
+      "item": [
+        {
+          "name": "01 - Logout customer and revoke token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/logout"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Logout succeeds', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Revoked token cannot access balances",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/customer/accounts/balances"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Revoked access token rejected', () => pm.expect([401, 503]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Delete managed account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/accounts/{{managedAccountId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Managed account deleted/inactivated', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

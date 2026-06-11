@@ -1,7 +1,7 @@
 package com.rikkeibank.repository;
 
-import com.rikkeibank.domain.KycProfile;
-import com.rikkeibank.domain.KycStatus;
+import com.rikkeibank.model.KycProfile;
+import com.rikkeibank.model.KycStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

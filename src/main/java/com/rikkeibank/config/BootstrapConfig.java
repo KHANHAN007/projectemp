@@ -1,12 +1,9 @@
 package com.rikkeibank.config;
 
-import com.rikkeibank.domain.RoleName;
-import com.rikkeibank.domain.User;
-import com.rikkeibank.repository.RoleRepository;
-import com.rikkeibank.repository.UserRepository;
+import com.rikkeibank.model.*;
+import com.rikkeibank.repository.*;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
